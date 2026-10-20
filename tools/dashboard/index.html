@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>InkOS 小说创作工作台控制面板</title>
+<style>
+:root {
+  --bg-color: #0b0f19;
+  --card-bg: #151e2e;
+  --card-border: #233249;
+  --accent: #38bdf8;
+  --accent-hover: #0ea5e9;
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --success: #10b981;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+  --console-bg: #060911;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+  background-color: var(--bg-color);
+  color: var(--text-main);
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+}
+#sidebar {
+  width: 250px;
+  background: #0f172a;
+  border-right: 1px solid var(--card-border);
+  display: flex;
+  flex-direction: column;
+}
+.brand {
+  padding: 20px;
+  font-size: 1.2rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid var(--card-border);
+  color: var(--accent);
+}
+.nav-menu {
+  flex: 1;
+  padding: 16px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: all 0.2s;
+  font-size: 0.95rem;
+}
+.nav-item:hover {
+  background: var(--card-bg);
+  color: var(--text-main);
+}
+.nav-item.active {
+  background: #1e293b;
+  border-left: 3px solid var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+#main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+header {
+  height: 60px;
+  border-bottom: 1px solid var(--card-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 28px;
+  background: rgba(21, 30, 46, 0.7);
+  backdrop-filter: blur(8px);
+}
+.content-area {
+  padding: 24px 28px;
+  max-width: 1300px;
+  width: 100%;
+  margin: 0 auto;
+  display: none;
+}
+.content-area.active { display: block; }
+.card {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  padding: 22px;
+  margin-bottom: 22px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
+}
+h2 { font-size: 1.3rem; margin-bottom: 16px; color: var(--text-main); display: flex; align-items: center; gap: 8px;}
+h3 { font-size: 1.05rem; margin-bottom: 10px; color: var(--accent); }
+.btn {
+  background: var(--accent);
+  color: #0b0f19;
+  font-weight: 600;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 18px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.92rem;
+  transition: all 0.2s;
+}
+.btn:hover { background: var(--accent-hover); color: #fff; }
+.btn-secondary { background: #334155; color: var(--text-main); }
+.btn-secondary:hover { background: #475569; }
+.btn-success { background: var(--success); color: white; }
+.btn-success:hover { background: #059669; }
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 18px;
+  margin-bottom: 22px;
+}
+.stat-box {
+  background: #0f172a;
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  padding: 16px;
+}
+.stat-val { font-size: 1.7rem; font-weight: 700; color: var(--accent); margin-top: 6px; }
+.stat-label { font-size: 0.85rem; color: var(--text-muted); }
+
+.form-group { margin-bottom: 16px; }
+label { display: block; font-size: 0.88rem; color: var(--text-muted); margin-bottom: 6px; }
+input, select, textarea {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--card-border);
+  background: #0f172a;
+  color: var(--text-main);
+  font-size: 0.95rem;
+  outline: none;
+}
+input:focus, textarea:focus { border-color: var(--accent); }
+.row { display: flex; gap: 16px; }
+.col { flex: 1; }
+
+/* Chapter viewer */
+.reader-split {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 20px;
+  height: 660px;
+}
+.chapter-list {
+  background: #0f172a;
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  overflow-y: auto;
+  padding: 8px;
+}
+.chapter-item {
+  padding: 10px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.88rem;
+  margin-bottom: 4px;
+  color: #cbd5e1;
+}
+.chapter-item:hover { background: #1e293b; color: white; }
+.chapter-item.active { background: #0284c7; color: white; font-weight: 600; }
+.chapter-content-box {
+  background: #0f172a;
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.chapter-content-box textarea {
+  flex: 1;
+  background: transparent;
+  border: none;
+  resize: none;
+  padding: 20px;
+  font-family: "PingFang SC", "Songti SC", "Microsoft YaHei", serif;
+  font-size: 1.05rem;
+  line-height: 1.85;
+}
+
+/* Chat Module */
+.chat-window {
+  height: 540px;
+  display: flex;
+  flex-direction: column;
+  background: #0f172a;
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.chat-messages {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.msg {
+  max-width: 82%;
+  padding: 12px 18px;
+  border-radius: 12px;
+  line-height: 1.6;
+  font-size: 0.95rem;
+  white-space: pre-wrap;
+}
+.msg.user {
+  background: #0284c7;
+  color: white;
+  align-self: flex-end;
+  border-bottom-right-radius: 2px;
+}
+.msg.assistant {
+  background: #1e293b;
+  border: 1px solid var(--card-border);
+  align-self: flex-start;
+  border-bottom-left-radius: 2px;
+}
+.chat-input-bar {
+  padding: 16px;
+  border-top: 1px solid var(--card-border);
+  display: flex;
+  gap: 12px;
+  background: #111827;
+}
+
+/* Console logs */
+.terminal {
+  background: var(--console-bg);
+  border: 1px solid #1e293b;
+  border-radius: 8px;
+  padding: 16px;
+  font-family: "Courier New", Courier, monospace;
+  font-size: 0.88rem;
+  color: #38bdf8;
+  height: 220px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+}
+.badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+.badge-active { background: #065f46; color: #34d399; }
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+  <div class="brand">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"></path><path d="M6 6h10"></path><path d="M6 10h10"></path></svg>
+    InkOS 控制面板
+  </div>
+  <div class="nav-menu">
+    <div class="nav-item active" onclick="switchTab('tab-books', this)">
+      <span>📚</span> 小说书架与总览
+    </div>
+    <div class="nav-item" onclick="switchTab('tab-reader', this)">
+      <span>📖</span> 章节阅读与编辑
+    </div>
+    <div class="nav-item" onclick="switchTab('tab-chat', this)">
+      <span>💬</span> AI 剧情与大纲沟通
+    </div>
+    <div class="nav-item" onclick="switchTab('tab-export', this)">
+      <span>📦</span> 自由章节切片导出
+    </div>
+    <div class="nav-item" onclick="switchTab('tab-runner', this)">
+      <span>⚙️</span> 执行者与模型设置
+    </div>
+  </div>
+</div>
+
+<div id="main">
+  <header>
+    <div>
+      <span style="color:var(--text-muted); font-size:0.9rem;">当前小说：</span>
+      <strong id="header-book-title" style="color:var(--accent);">加载中...</strong>
+    </div>
+    <div>
+      <span class="badge badge-active" id="header-runner-mode">本地 CLI 执行</span>
+    </div>
+  </header>
+
+  <!-- 1. 书籍总览 -->
+  <div id="tab-books" class="content-area active">
+    <div class="stats-grid">
+      <div class="stat-box">
+        <div class="stat-label">总字数</div>
+        <div class="stat-val" id="stat-words">0 字</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">已写章节</div>
+        <div class="stat-val" id="stat-chapters">0 章</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">规划目标</div>
+        <div class="stat-val" id="stat-target">200 章</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">题材与平台</div>
+        <div class="stat-val" id="stat-genre" style="font-size:1.25rem; margin-top:8px;">都市末日 · 番茄</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2><span>📋</span> 核心设定与大纲纲领</h2>
+      <div style="background:#0f172a; padding:18px; border-radius:8px; max-height:260px; overflow-y:auto; line-height:1.6; font-size:0.92rem; color:#cbd5e1; white-space:pre-wrap;" id="box-foundation">
+        加载中...
+      </div>
+    </div>
+
+    <div class="card">
+      <h2><span>👥</span> 核心登场人物档案</h2>
+      <div id="box-characters" style="display:flex; gap:16px; flex-wrap:wrap;">
+        加载中...
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. 章节阅读与编辑 -->
+  <div id="tab-reader" class="content-area">
+    <div class="reader-split">
+      <div class="chapter-list" id="chapter-list-ui">
+        <!-- 章节列表 -->
+      </div>
+      <div class="chapter-content-box">
+        <div style="padding:12px 20px; border-bottom:1px solid var(--card-border); display:flex; justify-content:space-between; align-items:center;">
+          <h3 id="current-chapter-title" style="margin:0;">选择左侧章节开始阅读</h3>
+          <div>
+            <button class="btn btn-secondary" onclick="saveCurrentChapter()">保存本章正文修改</button>
+          </div>
+        </div>
+        <textarea id="chapter-editor" placeholder="章节正文内容..."></textarea>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. AI 沟通模块 -->
+  <div id="tab-chat" class="content-area">
+    <div class="card">
+      <h2><span>💬</span> 与 AI 构思剧情 / 讨论大纲</h2>
+      <p style="color:var(--text-muted); font-size:0.9rem; margin-bottom:16px;">
+        您可以随时与 AI 探讨接下来的剧情走向、推演主角陈野的战略布局，或者构思新的配角和伏笔。支持本地规则联动和大模型直连。
+      </p>
+      <div class="chat-window">
+        <div class="chat-messages" id="chat-messages">
+          <div class="msg assistant">您好！我是您的网文创作主笔助手。我已经完全掌握了《末日神豪：从囤积百亿物资开始》的全部设定（陈野的12亿资金、物流园方舟基地、核心团队成员周建国、吴小刚、林晚晴等）。请问今天想要推进哪一部分剧情或讨论什么设定？</div>
+        </div>
+        <div class="chat-input-bar">
+          <input type="text" id="chat-input" placeholder="输入设想或问题，例如：讨论一下接下来第161章探索北方基地的剧情脉络..." onkeydown="if(event.key==='Enter') sendChat()">
+          <button class="btn" onclick="sendChat()">发送</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4. 章节切片标准小说导出 -->
+  <div id="tab-export" class="content-area">
+    <div class="card">
+      <h2><span>📦</span> 自由章节切片与标准格式导出</h2>
+      <p style="color:var(--text-muted); font-size:0.9rem; margin-bottom:20px;">
+        可自由选定导出任意章节区间（例如第 1 到 50 章），一键生成排版工整的标准小说文件（自动段首两格缩进、章节分割符与规范标题）。
+      </p>
+      
+      <div class="row">
+        <div class="col form-group">
+          <label>起始章节编号：</label>
+          <input type="number" id="export-start" value="1" min="1">
+        </div>
+        <div class="col form-group">
+          <label>结束章节编号：</label>
+          <input type="number" id="export-end" value="50" min="1">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>快速预设区间：</label>
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          <button class="btn btn-secondary" onclick="setExportRange(1, 50)">前 50 章 (1-50)</button>
+          <button class="btn btn-secondary" onclick="setExportRange(51, 100)">第 51-100 章</button>
+          <button class="btn btn-secondary" onclick="setExportRange(101, 160)">第 101-160 章</button>
+          <button class="btn btn-secondary" onclick="setExportRange(1, totalChapterMax)">全本导出 (1-全本)</button>
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:16px;">
+        <div class="col form-group">
+          <label>导出文件格式：</label>
+          <select id="export-format">
+            <option value="txt">标准网文 TXT 格式（适合各类手机阅读器、掌阅、微信读书、番茄）</option>
+            <option value="md">Markdown 格式（带目录与排版层级）</option>
+          </select>
+        </div>
+        <div class="col form-group" style="display:flex; align-items:center; gap:20px; margin-top:24px;">
+          <label style="display:inline-flex; align-items:center; gap:6px; cursor:pointer;">
+            <input type="checkbox" id="export-indent" checked style="width:auto;"> 正文自动段首全角缩进两格
+          </label>
+          <label style="display:inline-flex; align-items:center; gap:6px; cursor:pointer;">
+            <input type="checkbox" id="export-intro" checked style="width:auto;"> 包含作品简介与核心设定概述
+          </label>
+        </div>
+      </div>
+
+      <div style="margin-top:20px;">
+        <button class="btn btn-success" style="padding:14px 28px; font-size:1.05rem;" onclick="triggerExport()">
+          🚀 一键生成并下载标准小说文件
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5. 执行者与模型设置 -->
+  <div id="tab-runner" class="content-area">
+    <div class="card">
+      <h2><span>⚙️</span> 执行者模式选择 (由谁来执行写小说任务)</h2>
+      <div class="form-group">
+        <label>当前写作执行引擎：</label>
+        <select id="cfg-runner-mode" onchange="toggleRunnerView()">
+          <option value="cli">本地 InkOS CLI 执行模式（自动调用本地专业 Agent 与流水线）</option>
+          <option value="api">大模型 API Key 模式（直接连接 DeepSeek、Kimi、OpenAI 等在线模型）</option>
+        </select>
+      </div>
+
+      <!-- CLI Mode Controls -->
+      <div id="view-cli-controls" style="background:#0f172a; padding:18px; border-radius:8px; border:1px solid var(--card-border); margin-top:16px;">
+        <h3>本地 InkOS CLI 快速操作</h3>
+        <p style="color:var(--text-muted); font-size:0.88rem; margin-bottom:14px;">
+          由本地已初始化的 InkOS 引擎负责规划、写正文并由审查 Agent 进行去 AI 味与连续性审计。
+        </p>
+        <div style="display:flex; gap:12px; flex-wrap:wrap;">
+          <button class="btn" onclick="executeCLI('write_next')">✍️ 续写下一章 (inkos write next)</button>
+          <button class="btn btn-secondary" onclick="executeCLI('review')">🔍 运行全书审稿 (inkos review)</button>
+          <button class="btn btn-secondary" onclick="executeCLI('status')">📊 查看全书状态 (inkos status)</button>
+          <button class="btn btn-secondary" onclick="executeCLI('doctor')">🩺 环境诊断 (inkos doctor)</button>
+        </div>
+      </div>
+
+      <!-- API Key Controls -->
+      <div id="view-api-controls" style="background:#0f172a; padding:18px; border-radius:8px; border:1px solid var(--card-border); margin-top:16px; display:none;">
+        <h3>在线大模型 API 接入配置</h3>
+        <div class="form-group">
+          <label>API Base URL (支持任意 OpenAI 兼容接口，如 DeepSeek、Moonshot、SiliconFlow 等)：</label>
+          <input type="text" id="cfg-api-base-url" placeholder="https://api.deepseek.com/v1">
+        </div>
+        <div class="row">
+          <div class="col form-group">
+            <label>API Key：</label>
+            <input type="password" id="cfg-api-key" placeholder="sk-...">
+          </div>
+          <div class="col form-group">
+            <label>模型名称：</label>
+            <input type="text" id="cfg-model-name" placeholder="deepseek-chat 或 moonshot-v1-auto">
+          </div>
+        </div>
+        <button class="btn btn-secondary" onclick="saveSettings()">保存 API 设置</button>
+      </div>
+
+      <div style="margin-top:24px;">
+        <h3>执行控制台输出</h3>
+        <div class="terminal" id="console-output">等待任务指令...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let currentBookId = "doomsday-tycoon";
+let currentLoadedChapterNum = null;
+let totalChapterMax = 160;
+
+function switchTab(tabId, el) {
+  document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+  document.querySelectorAll('.content-area').forEach(i => i.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById(tabId).classList.add('active');
+  if(tabId === 'tab-reader' && !currentLoadedChapterNum) {
+    loadChapterContent(1);
+  }
+}
+
+async function fetchBookInfo() {
+  try {
+    const res = await fetch('/api/books');
+    const books = await res.json();
+    if(books && books.length > 0) {
+      const b = books[0];
+      currentBookId = b.id;
+      totalChapterMax = b.chapterCount;
+      document.getElementById('header-book-title').innerText = b.title;
+      document.getElementById('stat-words').innerText = (b.totalWords).toLocaleString() + " 字";
+      document.getElementById('stat-chapters').innerText = b.chapterCount + " 章";
+      document.getElementById('stat-target').innerText = b.targetChapters + " 章";
+      document.getElementById('stat-genre').innerText = b.genre + " · " + b.platform;
+      document.getElementById('export-end').value = Math.min(50, b.chapterCount);
+    }
+
+    const dRes = await fetch(`/api/books/${currentBookId}`);
+    const details = await dRes.json();
+    if(details) {
+      document.getElementById('box-foundation').innerText = details.foundation || details.readme || "无设定记录";
+      const charBox = document.getElementById('box-characters');
+      charBox.innerHTML = '';
+      (details.characters || []).forEach(c => {
+        const card = document.createElement('div');
+        card.style = "background:#0f172a; border:1px solid var(--card-border); border-radius:8px; padding:12px; width:220px;";
+        card.innerHTML = `<strong style="color:var(--accent);">${c.name}</strong><p style="font-size:0.8rem; color:var(--text-muted); margin-top:4px;">${c.content.slice(0, 70)}...</p>`;
+        charBox.appendChild(card);
+      });
+    }
+
+    loadChaptersList();
+  } catch(e) {
+    console.error("加载数据异常", e);
+  }
+}
+
+async function loadChaptersList() {
+  const res = await fetch(`/api/books/${currentBookId}/chapters`);
+  const chapters = await res.json();
+  const listEl = document.getElementById('chapter-list-ui');
+  listEl.innerHTML = '';
+  chapters.forEach(c => {
+    const div = document.createElement('div');
+    div.className = `chapter-item ${currentLoadedChapterNum === c.number ? 'active' : ''}`;
+    div.id = `ch-item-${c.number}`;
+    div.innerHTML = `<span>第${c.number}章 ${c.title}</span><span style="font-size:0.75rem; color:var(--text-muted);">${c.wordCount}字</span>`;
+    div.onclick = () => loadChapterContent(c.number);
+    listEl.appendChild(div);
+  });
+}
+
+async function loadChapterContent(num) {
+  currentLoadedChapterNum = num;
+  document.querySelectorAll('.chapter-item').forEach(el => el.classList.remove('active'));
+  const activeEl = document.getElementById(`ch-item-${num}`);
+  if(activeEl) activeEl.classList.add('active');
+
+  const res = await fetch(`/api/books/${currentBookId}/chapters/${num}`);
+  const data = await res.json();
+  if(data.content) {
+    document.getElementById('current-chapter-title').innerText = `第 ${num} 章 正文阅读与修改`;
+    document.getElementById('chapter-editor').value = data.content;
+  }
+}
+
+async function saveCurrentChapter() {
+  if(!currentLoadedChapterNum) return;
+  const content = document.getElementById('chapter-editor').value;
+  const res = await fetch(`/api/books/${currentBookId}/chapters/${currentLoadedChapterNum}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ content })
+  });
+  const ret = await res.json();
+  if(ret.ok) {
+    alert("保存成功！");
+    loadChaptersList();
+  }
+}
+
+function setExportRange(s, e) {
+  document.getElementById('export-start').value = s;
+  document.getElementById('export-end').value = e;
+}
+
+function triggerExport() {
+  const start = parseInt(document.getElementById('export-start').value);
+  const end = parseInt(document.getElementById('export-end').value);
+  const fmt = document.getElementById('export-format').value;
+  const indent = document.getElementById('export-indent').checked;
+  const intro = document.getElementById('export-intro').checked;
+
+  const url = `/api/books/${currentBookId}/export?start=${start}&end=${end}&format=${fmt}&indent=${indent}&intro=${intro}`;
+  window.open(url, '_blank');
+}
+
+async function sendChat() {
+  const input = document.getElementById('chat-input');
+  const txt = input.value.trim();
+  if(!txt) return;
+
+  const msgBox = document.getElementById('chat-messages');
+  const userDiv = document.createElement('div');
+  userDiv.className = 'msg user';
+  userDiv.innerText = txt;
+  msgBox.appendChild(userDiv);
+  input.value = '';
+  msgBox.scrollTop = msgBox.scrollHeight;
+
+  const loadingDiv = document.createElement('div');
+  loadingDiv.className = 'msg assistant';
+  loadingDiv.innerText = '正在思考剧情推演...';
+  msgBox.appendChild(loadingDiv);
+  msgBox.scrollTop = msgBox.scrollHeight;
+
+  const res = await fetch('/api/chat', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ book_id: currentBookId, message: txt })
+  });
+  const ret = await res.json();
+  loadingDiv.innerText = ret.reply || '思考完成';
+  msgBox.scrollTop = msgBox.scrollHeight;
+}
+
+function toggleRunnerView() {
+  const mode = document.getElementById('cfg-runner-mode').value;
+  document.getElementById('view-cli-controls').style.display = mode === 'cli' ? 'block' : 'none';
+  document.getElementById('view-api-controls').style.display = mode === 'api' ? 'block' : 'none';
+  document.getElementById('header-runner-mode').innerText = mode === 'cli' ? '本地 CLI 执行' : '大模型 API 模式';
+}
+
+async function loadConfig() {
+  const res = await fetch('/api/config');
+  const cfg = await res.json();
+  document.getElementById('cfg-runner-mode').value = cfg.runner_mode;
+  document.getElementById('cfg-api-base-url').value = cfg.api_base_url || '';
+  document.getElementById('cfg-api-key').value = cfg.api_key || '';
+  document.getElementById('cfg-model-name').value = cfg.model_name || '';
+  toggleRunnerView();
+}
+
+async function saveSettings() {
+  const cfg = {
+    runner_mode: document.getElementById('cfg-runner-mode').value,
+    api_base_url: document.getElementById('cfg-api-base-url').value,
+    api_key: document.getElementById('cfg-api-key').value,
+    model_name: document.getElementById('cfg-model-name').value
+  };
+  await fetch('/api/config', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(cfg)
+  });
+  alert("配置已成功保存！");
+  toggleRunnerView();
+}
+
+async function executeCLI(action) {
+  const consoleEl = document.getElementById('console-output');
+  consoleEl.innerText = `[任务下发] 正在执行 ${action}... 请稍候...\n`;
+  const res = await fetch('/api/execute', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ book_id: currentBookId, action: action })
+  });
+  const ret = await res.json();
+  consoleEl.innerText += `[任务输出]：\n` + (ret.output || ret.error || '无输出');
+  fetchBookInfo();
+}
+
+window.onload = () => {
+  fetchBookInfo();
+  loadConfig();
+};
+</script>
+</body>
+</html>

@@ -3013,8 +3013,19 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string, o
 
     try {
       const files = await readdir(chaptersDir);
-      const paddedNum = String(num).padStart(4, "0");
-      const match = files.find((f) => f.startsWith(paddedNum) && f.endsWith(".md"));
+      const padded4 = String(num).padStart(4, "0");
+      const padded3 = String(num).padStart(3, "0");
+      const match = files.find((f) =>
+        f.endsWith(".md") && (
+          f.startsWith(padded4) ||
+          f.startsWith(padded3) ||
+          f.startsWith(`chapter-${padded3}`) ||
+          f.startsWith(`chapter-${num}`) ||
+          f.startsWith(`${num}_`) ||
+          f.startsWith(`${num}-`) ||
+          f === `${num}.md`
+        )
+      );
       if (!match) return c.json({ error: "Chapter not found" }, 404);
       const content = await readFile(join(chaptersDir, match), "utf-8");
       return c.json({ chapterNumber: num, filename: match, content });
