@@ -4,6 +4,7 @@
 InkOS Local CLI Bridge
 将本地已配置好的 agy 和 opencode CLI 包装为标准 OpenAI 兼容的 API 服务，
 供 InkOS Studio (Web) 及本地工具无缝调用进行小说创作与对话。
+支持真实 Token 级实时流式输出 (stream-json)，杜绝超时与连接中断。
 """
 
 import os
@@ -12,7 +13,9 @@ import json
 import time
 import subprocess
 import re
-from http.server import HTTPServer, BaseHTTPRequestHandler
+import queue
+import threading
+from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 
 AGY_PATH = "/root/.local/bin/agy"
 OPENCODE_PATH = "/root/.opencode/bin/opencode"
@@ -44,26 +47,71 @@ def format_messages_to_prompt(messages):
             parts.append(f"[{role}]:\n{content}\n")
     return "\n".join(parts)
 
-def call_cli_backend(prompt, model_id="gemini-3.8-flash-high"):
+def call_cli_backend_stream(prompt, model_id="gemini-3.8-flash-high"):
+    """
+    流式执行本地 CLI，实时 yield 生成的文本增量 (token/chunk)。
+    """
     if "opencode" in model_id.lower():
         cmd = [OPENCODE_PATH, "run", prompt]
         try:
-            p = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
-            out = p.stdout.strip()
-            out = re.sub(r'^>\s*build[^\n]*\n', '', out).strip()
-            return out or p.stderr.strip() or "创作完成。"
+            p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1)
+            for line in p.stdout:
+                if line.startswith("> build"):
+                    continue
+                yield line
+            p.wait()
+            if p.returncode != 0 and p.stderr:
+                err = p.stderr.read().strip()
+                if err:
+                    yield f"\n[OpenCode Error: {err}]"
         except Exception as e:
-            return f"OpenCode 执行异常: {str(e)}"
+            yield f"[OpenCode 执行异常: {str(e)}]"
     else:
         valid_models = [m["id"] for m in AVAILABLE_MODELS if m["backend"] == "agy"]
         chosen_model = model_id if model_id in valid_models else "gemini-3.8-flash-high"
-        cmd = [AGY_PATH, "-p", prompt, "--model", chosen_model, "--dangerously-skip-permissions", "--output-format", "text"]
+        cmd = [
+            AGY_PATH, "-p", prompt,
+            "--model", chosen_model,
+            "--dangerously-skip-permissions",
+            "--output-format", "stream-json"
+        ]
         try:
-            p = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
-            out = p.stdout.strip()
-            return out or p.stderr.strip() or "创作完成。"
+            p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1)
+            yielded_any = False
+            last_response = ""
+
+            for raw_line in p.stdout:
+                line = raw_line.strip()
+                if not line:
+                    continue
+                try:
+                    data = json.loads(line)
+                    evt = data.get("event")
+                    if evt == "step_update":
+                        su = data.get("step_update", {})
+                        delta = su.get("text_delta")
+                        if delta:
+                            yielded_any = True
+                            yield delta
+                    elif evt == "result":
+                        res = data.get("result", {})
+                        last_response = res.get("response", "")
+                except Exception:
+                    continue
+
+            p.wait()
+            # 如果流式未能拿到 step_update 但最后有 result，兜底输出
+            if not yielded_any and last_response:
+                yield last_response
+            elif not yielded_any:
+                err = p.stderr.read().strip() if p.stderr else ""
+                yield err or "创作完成。"
         except Exception as e:
-            return f"AGY 执行异常: {str(e)}"
+            yield f"[AGY 执行异常: {str(e)}]"
+
+def call_cli_backend(prompt, model_id="gemini-3.8-flash-high"):
+    chunks = list(call_cli_backend_stream(prompt, model_id=model_id))
+    return "".join(chunks).strip() or "创作完成。"
 
 class OpenAIApiHandler(BaseHTTPRequestHandler):
     def _send_cors(self):
@@ -127,16 +175,9 @@ class OpenAIApiHandler(BaseHTTPRequestHandler):
             model = data.get("model", "gemini-3.8-flash-high")
             stream = data.get("stream", False)
 
-            # Build prompt
             prompt = format_messages_to_prompt(messages)
             if not prompt.strip():
                 prompt = "请回复OK。"
-
-            # Fast check for simple health probe / test
-            if len(prompt.strip()) < 15 and "ok" in prompt.lower():
-                response_text = "OK"
-            else:
-                response_text = call_cli_backend(prompt, model_id=model)
 
             created_time = int(time.time())
             cmpl_id = f"chatcmpl-local-cli-{created_time}"
@@ -145,42 +186,82 @@ class OpenAIApiHandler(BaseHTTPRequestHandler):
                 self.send_response(200)
                 self._send_cors()
                 self.send_header("Content-Type", "text/event-stream; charset=utf-8")
-                self.send_header("Cache-Control", "no-cache")
+                self.send_header("Cache-Control", "no-cache, no-transform")
+                self.send_header("X-Accel-Buffering", "no")
                 self.send_header("Connection", "close")
                 self.end_headers()
 
-                chunk1 = {
+                # 快速探活
+                if len(prompt.strip()) < 15 and "ok" in prompt.lower():
+                    chunk_text = "OK"
+                    chunk = {
+                        "id": cmpl_id,
+                        "object": "chat.completion.chunk",
+                        "created": created_time,
+                        "model": model,
+                        "choices": [{"index": 0, "delta": {"content": chunk_text}, "finish_reason": None}]
+                    }
+                    self.wfile.write(f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n".encode("utf-8"))
+                    self.wfile.flush()
+                else:
+                    # 真实实时流式投递
+                    try:
+                        for chunk_text in call_cli_backend_stream(prompt, model_id=model):
+                            if not chunk_text:
+                                continue
+                            chunk = {
+                                "id": cmpl_id,
+                                "object": "chat.completion.chunk",
+                                "created": int(time.time()),
+                                "model": model,
+                                "choices": [
+                                    {
+                                        "index": 0,
+                                        "delta": {"content": chunk_text},
+                                        "finish_reason": None
+                                    }
+                                ]
+                            }
+                            self.wfile.write(f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n".encode("utf-8"))
+                            self.wfile.flush()
+                    except (BrokenPipeError, ConnectionResetError):
+                        return
+                    except Exception as e:
+                        err_chunk = {
+                            "id": cmpl_id,
+                            "object": "chat.completion.chunk",
+                            "created": int(time.time()),
+                            "model": model,
+                            "choices": [{"index": 0, "delta": {"content": f"\n[Bridge Error: {str(e)}]"}, "finish_reason": None}]
+                        }
+                        try:
+                            self.wfile.write(f"data: {json.dumps(err_chunk, ensure_ascii=False)}\n\n".encode("utf-8"))
+                            self.wfile.flush()
+                        except Exception:
+                            pass
+
+                # 结束标志
+                stop_chunk = {
                     "id": cmpl_id,
                     "object": "chat.completion.chunk",
-                    "created": created_time,
+                    "created": int(time.time()),
                     "model": model,
-                    "choices": [
-                        {
-                            "index": 0,
-                            "delta": {"role": "assistant", "content": response_text},
-                            "finish_reason": None
-                        }
-                    ]
+                    "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]
                 }
-                chunk2 = {
-                    "id": cmpl_id,
-                    "object": "chat.completion.chunk",
-                    "created": created_time,
-                    "model": model,
-                    "choices": [
-                        {
-                            "index": 0,
-                            "delta": {},
-                            "finish_reason": "stop"
-                        }
-                    ]
-                }
-                self.wfile.write(f"data: {json.dumps(chunk1, ensure_ascii=False)}\n\n".encode("utf-8"))
-                self.wfile.write(f"data: {json.dumps(chunk2, ensure_ascii=False)}\n\n".encode("utf-8"))
-                self.wfile.write(b"data: [DONE]\n\n")
-                self.wfile.flush()
+                try:
+                    self.wfile.write(f"data: {json.dumps(stop_chunk, ensure_ascii=False)}\n\n".encode("utf-8"))
+                    self.wfile.write(b"data: [DONE]\n\n")
+                    self.wfile.flush()
+                except Exception:
+                    pass
                 self.close_connection = True
+                return
             else:
+                if len(prompt.strip()) < 15 and "ok" in prompt.lower():
+                    response_text = "OK"
+                else:
+                    response_text = call_cli_backend(prompt, model_id=model)
+
                 resp = {
                     "id": cmpl_id,
                     "object": "chat.completion",
@@ -209,13 +290,13 @@ class OpenAIApiHandler(BaseHTTPRequestHandler):
                 self.send_header("Content-Length", str(len(body)))
                 self.end_headers()
                 self.wfile.write(body)
-            return
+                return
 
         self.send_error(404, "Not Found")
 
 def run(port=9099):
-    server = HTTPServer(("0.0.0.0", port), OpenAIApiHandler)
-    print(f"InkOS Local CLI Bridge running on http://0.0.0.0:{port}")
+    server = ThreadingHTTPServer(("0.0.0.0", port), OpenAIApiHandler)
+    print(f"InkOS Local CLI Bridge (Streaming & Multi-threaded) running on http://0.0.0.0:{port}")
     server.serve_forever()
 
 if __name__ == "__main__":
