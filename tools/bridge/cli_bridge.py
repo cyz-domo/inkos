@@ -57,7 +57,7 @@ def call_cli_backend(prompt, model_id="gemini-3.8-flash-high"):
     else:
         valid_models = [m["id"] for m in AVAILABLE_MODELS if m["backend"] == "agy"]
         chosen_model = model_id if model_id in valid_models else "gemini-3.8-flash-high"
-        cmd = [AGY_PATH, "-p", prompt, "--model", chosen_model, "--output-format", "text"]
+        cmd = [AGY_PATH, "-p", prompt, "--model", chosen_model, "--dangerously-skip-permissions", "--output-format", "text"]
         try:
             p = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
             out = p.stdout.strip()
