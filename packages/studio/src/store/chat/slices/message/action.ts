@@ -12,7 +12,7 @@ import type {
   SessionSummary,
   ToolExecution,
 } from "../../types";
-import { fetchJson } from "../../../../hooks/use-api";
+import { fetchJson, ApiResponseError } from "../../../../hooks/use-api";
 import { tr } from "../../../../lib/app-language";
 import { isConfirmedProductionSend } from "../../message-policy";
 import { attachSessionStreamListeners } from "./stream-events";
@@ -754,14 +754,30 @@ export const createMessageSlice: StateCreator<ChatStore, [], [], MessageActions>
       const payload = (error as { payload?: AgentResponse })?.payload;
       // Explicit stop or a newer request already owns this session's UI.
       if (get().sessions[sessionId]?.stream !== streamEs) return;
+      const isProxyTimeout = error instanceof ApiResponseError && (error.status === 502 || error.status === 504);
       if ((error instanceof TypeError || error instanceof SyntaxError
-        || (error instanceof Error && error.name === "AbortError"))
+        || (error instanceof Error && error.name === "AbortError")
+        || isProxyTimeout)
         && get().sessions[sessionId]?.isChatStreaming) {
         rememberFailedSend();
         set(state => ({ sessions: updateSession(state.sessions, sessionId, () => ({
           detachedChatRequestId: sourceRequestId,
         })) }));
-        await get().loadSessionDetail(sessionId, true);
+        // Proxy timeout (502/504) or network disconnect: server is likely still running in the background.
+        // Poll for session detail up to 25 times (every 3s) until assistant finishes.
+        const pollSession = async () => {
+          for (let i = 0; i < 25; i++) {
+            await new Promise((r) => setTimeout(r, 3000));
+            const current = get().sessions[sessionId];
+            if (!current) break;
+            await get().loadSessionDetail(sessionId, true);
+            const latestMsg = get().sessions[sessionId]?.messages.slice(-1)[0];
+            if (latestMsg && latestMsg.role === "assistant" && !latestMsg.thinkingStreaming) {
+              break;
+            }
+          }
+        };
+        void pollSession();
         return;
       }
       failureExecutions = payload?.details?.toolExecutions ?? [];
