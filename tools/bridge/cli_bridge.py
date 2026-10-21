@@ -31,7 +31,9 @@ AVAILABLE_MODELS = [
 ]
 
 def format_messages_to_prompt(messages):
-    parts = []
+    parts = [
+        "【写作系统核心准则】：你现在作为 InkOS 小说创作者与小说助手。严禁尝试调用任何操作系统命令、bash 或本地工具！请直接根据上下文设定与用户任务，以纯文本格式进行回复、构思或正文创作！\n"
+    ]
     for msg in messages:
         role = msg.get("role", "")
         content = msg.get("content", "")
@@ -68,10 +70,11 @@ def call_cli_backend_stream(prompt, model_id="gemini-3.8-flash-high"):
             yield f"[OpenCode 执行异常: {str(e)}]"
     else:
         valid_models = [m["id"] for m in AVAILABLE_MODELS if m["backend"] == "agy"]
-        chosen_model = model_id if model_id in valid_models else "gemini-3.8-flash-high"
+        chosen_model = model_id if model_id in valid_models else "gemini-3.8-flash-medium"
         cmd = [
             AGY_PATH, "-p", prompt,
             "--model", chosen_model,
+            "--disable-slash-commands",
             "--dangerously-skip-permissions",
             "--output-format", "stream-json"
         ]

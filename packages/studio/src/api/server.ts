@@ -6667,6 +6667,68 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string, o
     return c.json({ assetRef, rev });
   });
 
+  // --- CLI Bridge Management APIs ---
+  app.get("/api/v1/bridge/status", async (c) => {
+    try {
+      const supervisor = await import("../../../../tools/bridge/supervisor.js");
+      const health = await supervisor.checkBridgeHealth();
+      const currentModel = supervisor.getCurrentModel();
+      return c.json({
+        ok: health.online,
+        latencyMs: health.latencyMs,
+        port: 9099,
+        model: currentModel,
+        availableModels: supervisor.AVAILABLE_MODELS,
+      });
+    } catch (e: any) {
+      return c.json({ ok: false, error: e.message }, 500);
+    }
+  });
+
+  app.post("/api/v1/bridge/restart", async (c) => {
+    try {
+      const supervisor = await import("../../../../tools/bridge/supervisor.js");
+      const res = await supervisor.restartBridge();
+      return c.json(res);
+    } catch (e: any) {
+      return c.json({ success: false, error: e.message }, 500);
+    }
+  });
+
+  app.post("/api/v1/bridge/model", async (c) => {
+    try {
+      const body = await c.req.json().catch(() => ({}));
+      const model = body.model;
+      if (!model) return c.json({ ok: false, error: "model is required" }, 400);
+      const supervisor = await import("../../../../tools/bridge/supervisor.js");
+      await supervisor.setCurrentModel(model);
+      const res = await supervisor.restartBridge();
+      return c.json({ ok: true, model, restart: res });
+    } catch (e: any) {
+      return c.json({ ok: false, error: e.message }, 500);
+    }
+  });
+
+  app.get("/api/v1/bridge/logs", async (c) => {
+    try {
+      const supervisor = await import("../../../../tools/bridge/supervisor.js");
+      const logs = await supervisor.getBridgeLogs(60);
+      return c.json({ logs });
+    } catch (e: any) {
+      return c.json({ logs: `读取异常: ${e.message}` }, 500);
+    }
+  });
+
+  app.post("/api/v1/bridge/test", async (c) => {
+    try {
+      const supervisor = await import("../../../../tools/bridge/supervisor.js");
+      const res = await supervisor.testBridgeInference();
+      return c.json(res);
+    } catch (e: any) {
+      return c.json({ success: false, error: e.message }, 500);
+    }
+  });
+
   return app;
 }
 
@@ -6677,6 +6739,7 @@ export async function startStudioServer(
   port = 4567,
   options?: { readonly staticDir?: string; readonly hostname?: string; readonly allowedOrigins?: readonly string[] },
 ): Promise<void> {
+  import("../../../../tools/bridge/supervisor.js").then((m) => m.initBridgeSupervisor()).catch((e) => console.error("Supervisor init error:", e));
   await recoverAtomicFileSets(root, true);
   const config = await loadProjectConfig(root, { consumer: "studio", requireApiKey: false });
 
