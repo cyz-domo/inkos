@@ -6670,6 +6670,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string, o
   // --- CLI Bridge Management APIs ---
   app.get("/api/v1/bridge/status", async (c) => {
     try {
+      // @ts-ignore
       const supervisor = await import("../../../../tools/bridge/supervisor.js");
       const health = await supervisor.checkBridgeHealth();
       const currentModel = supervisor.getCurrentModel();
@@ -6687,6 +6688,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string, o
 
   app.post("/api/v1/bridge/restart", async (c) => {
     try {
+      // @ts-ignore
       const supervisor = await import("../../../../tools/bridge/supervisor.js");
       const res = await supervisor.restartBridge();
       return c.json(res);
@@ -6700,6 +6702,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string, o
       const body = await c.req.json().catch(() => ({}));
       const model = body.model;
       if (!model) return c.json({ ok: false, error: "model is required" }, 400);
+      // @ts-ignore
       const supervisor = await import("../../../../tools/bridge/supervisor.js");
       await supervisor.setCurrentModel(model);
       const res = await supervisor.restartBridge();
@@ -6711,6 +6714,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string, o
 
   app.get("/api/v1/bridge/logs", async (c) => {
     try {
+      // @ts-ignore
       const supervisor = await import("../../../../tools/bridge/supervisor.js");
       const logs = await supervisor.getBridgeLogs(60);
       return c.json({ logs });
@@ -6721,6 +6725,7 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string, o
 
   app.post("/api/v1/bridge/test", async (c) => {
     try {
+      // @ts-ignore
       const supervisor = await import("../../../../tools/bridge/supervisor.js");
       const res = await supervisor.testBridgeInference();
       return c.json(res);
@@ -6739,6 +6744,7 @@ export async function startStudioServer(
   port = 4567,
   options?: { readonly staticDir?: string; readonly hostname?: string; readonly allowedOrigins?: readonly string[] },
 ): Promise<void> {
+  // @ts-ignore
   import("../../../../tools/bridge/supervisor.js").then((m) => m.initBridgeSupervisor()).catch((e) => console.error("Supervisor init error:", e));
   await recoverAtomicFileSets(root, true);
   const config = await loadProjectConfig(root, { consumer: "studio", requireApiKey: false });
