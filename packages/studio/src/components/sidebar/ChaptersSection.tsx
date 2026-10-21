@@ -22,7 +22,7 @@ export function ChaptersSection({ bookId, isZh }: ChaptersSectionProps) {
 
   useEffect(() => {
     fetchJson<{ chapters: ChapterMeta[] }>(`/books/${bookId}`)
-      .then((data) => setChapters(data.chapters))
+      .then((data) => setChapters(data?.chapters || []))
       .catch(() => setChapters([]));
   }, [bookId, bookDataVersion]);
 
@@ -35,7 +35,8 @@ export function ChaptersSection({ bookId, isZh }: ChaptersSectionProps) {
       ) : (
         <ul className="space-y-1 max-h-52 overflow-y-auto overflow-x-hidden">
           {chapters.map((ch) => {
-            const ind = ch.observations.length > 0
+            const hasObservations = (ch.observations?.length ?? 0) > 0;
+            const ind = hasObservations
               ? { symbol: "◆", color: "text-amber-500" }
               : { symbol: "●", color: "text-emerald-500" };
             return (

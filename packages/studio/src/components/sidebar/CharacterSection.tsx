@@ -46,7 +46,7 @@ export function CharacterSection({ bookId }: CharacterSectionProps) {
     fetchJson<{ files: ReadonlyArray<{ name: string }> }>(`/books/${bookId}/truth`)
       .then((data) => {
         if (cancelled) return;
-        const roleRefs = data.files
+        const roleRefs = (data?.files || [])
           .map((f) => roleFromPath(f.name))
           .filter((r): r is RoleRef => r !== null)
           .sort((a, b) =>

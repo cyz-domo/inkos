@@ -22,11 +22,11 @@ export function FoundationSection({ bookId }: FoundationSectionProps) {
 
   useEffect(() => {
     fetchJson<{ files: TruthFileInfo[] }>(`/books/${bookId}/truth`)
-      .then((data) => setFiles(data.files))
+      .then((data) => setFiles(data?.files || []))
       .catch(() => setFiles([]));
   }, [bookId, bookDataVersion]);
 
-  const available = files
+  const available = (files || [])
     .filter((f) => foundationFileLabel(f.name) !== undefined)
     .sort((a, b) => FOUNDATION_FILE_ORDER.indexOf(a.name) - FOUNDATION_FILE_ORDER.indexOf(b.name));
 
