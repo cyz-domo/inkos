@@ -6758,16 +6758,23 @@ export async function startStudioServer(
         const content = await readFileFs(filePath);
         const ext = filePath.split(".").pop() ?? "";
         const contentTypes: Record<string, string> = {
-          js: "application/javascript",
-          css: "text/css",
+          js: "application/javascript; charset=utf-8",
+          css: "text/css; charset=utf-8",
           svg: "image/svg+xml",
           png: "image/png",
           ico: "image/x-icon",
-          json: "application/json",
+          json: "application/json; charset=utf-8",
         };
-        return new Response(content, {
-          headers: { "Content-Type": contentTypes[ext] ?? "application/octet-stream" },
-        });
+        const headers: Record<string, string> = {
+          "Content-Type": contentTypes[ext] ?? "application/octet-stream",
+          "Cache-Control": "public, max-age=31536000, immutable",
+        };
+        const acceptEncoding = c.req.header("accept-encoding") ?? "";
+        if (acceptEncoding.includes("gzip") && (ext === "js" || ext === "css" || ext === "json" || ext === "svg")) {
+          headers["Content-Encoding"] = "gzip";
+          return new Response(gzipSync(content), { headers });
+        }
+        return new Response(content, { headers });
       } catch {
         return c.notFound();
       }
@@ -6779,6 +6786,7 @@ export async function startStudioServer(
       const indexHtml = await readFileFs(indexPath, "utf-8");
       app.get("*", (c) => {
         if (c.req.path.startsWith("/api/v1/")) return c.notFound();
+        c.header("Cache-Control", "no-cache");
         return c.html(indexHtml);
       });
     }
