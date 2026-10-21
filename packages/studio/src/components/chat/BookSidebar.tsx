@@ -4,7 +4,7 @@ import type { TFunction } from "../../hooks/use-i18n";
 import type { SSEMessage } from "../../hooks/use-sse";
 import { useChatStore } from "../../store/chat";
 import { fetchJson } from "../../hooks/use-api";
-import { PanelRightClose, PanelRightOpen, ArrowLeft, Loader2, Pencil, Save, X } from "lucide-react";
+import { PanelRightClose, PanelRightOpen, ArrowLeft, Loader2, Pencil, Save, X, ChevronLeft, ChevronRight } from "lucide-react";
 import { Streamdown } from "streamdown";
 import { cjk } from "@streamdown/cjk";
 import { ProgressSection } from "../sidebar/ProgressSection";
@@ -58,20 +58,68 @@ function renderTruthBody(
   return <Streamdown plugins={streamdownPlugins} mode="static">{content}</Streamdown>;
 }
 
+export function parseNovelParagraphs(content: string): { title: string | null; paragraphs: string[] } {
+  if (!content) return { title: null, paragraphs: [] };
+  let text = content.replace(/\r\n/g, "\n");
+  let title: string | null = null;
+  const lines = text.split("\n");
+  if (lines.length > 0 && lines[0].startsWith("# ")) {
+    title = lines[0].replace(/^#\s*/, "").trim();
+    text = lines.slice(1).join("\n").trim();
+  }
+  // Convert inline full-width indentation to double newlines
+  text = text.replace(/([。！？…”’」』\n])\s*[　\s]{2,}/g, "$1\n\n");
+  const rawParagraphs = text.split(/\n+/);
+  const paragraphs: string[] = [];
+  for (const raw of rawParagraphs) {
+    const p = raw.replace(/^[　\s]+|[　\s]+$/g, "");
+    if (!p || p === "---" || p === "***") continue;
+    paragraphs.push(p);
+  }
+  return { title, paragraphs };
+}
+
 function ArtifactView({ bookId }: { readonly bookId: string }) {
   const artifactFile = useChatStore((s) => s.artifactFile);
   const artifactChapter = useChatStore((s) => s.artifactChapter);
   const closeArtifact = useChatStore((s) => s.closeArtifact);
+  const openChapterArtifact = useChatStore((s) => s.openChapterArtifact);
   const [content, setContent] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [editContent, setEditContent] = useState("");
   const [saving, setSaving] = useState(false);
+  const [chapters, setChapters] = useState<ReadonlyArray<{ number: number; title: string }>>([]);
 
   const isChapter = artifactChapter !== null;
   const label = isChapter
     ? `第 ${artifactChapter} 章`
     : artifactFile ? artifactLabel(artifactFile) : "";
+
+  useEffect(() => {
+    fetchJson<{ chapters: { number: number; title: string }[] }>(`/books/${bookId}`)
+      .then((data) => setChapters(data.chapters || []))
+      .catch(() => setChapters([]));
+  }, [bookId]);
+
+  const sortedChapterNumbers = chapters.map((c) => c.number).sort((a, b) => a - b);
+  const currentIndex = isChapter && artifactChapter !== null ? sortedChapterNumbers.indexOf(artifactChapter) : -1;
+  const hasPrev = isChapter && artifactChapter !== null && (currentIndex > 0 || (currentIndex === -1 && artifactChapter > 1));
+  const hasNext = isChapter && artifactChapter !== null && (currentIndex >= 0 ? currentIndex < sortedChapterNumbers.length - 1 : true);
+  const prevChapter = hasPrev ? (currentIndex > 0 ? sortedChapterNumbers[currentIndex - 1] : (artifactChapter ?? 1) - 1) : null;
+  const nextChapter = hasNext ? (currentIndex >= 0 && currentIndex < sortedChapterNumbers.length - 1 ? sortedChapterNumbers[currentIndex + 1] : (artifactChapter ?? 1) + 1) : null;
+
+  const handlePrevChapter = () => {
+    if (prevChapter !== null) {
+      openChapterArtifact(prevChapter);
+    }
+  };
+
+  const handleNextChapter = () => {
+    if (nextChapter !== null) {
+      openChapterArtifact(nextChapter);
+    }
+  };
 
   useEffect(() => {
     setEditing(false);
@@ -123,19 +171,45 @@ function ArtifactView({ bookId }: { readonly bookId: string }) {
     }
   }, [bookId, artifactFile, artifactChapter, isChapter, editContent]);
 
+  const { title: parsedTitle, paragraphs: parsedParagraphs } = isChapter && content
+    ? parseNovelParagraphs(content)
+    : { title: null, paragraphs: [] };
+
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center gap-2 px-3 py-2.5 border-b border-border/20 shrink-0">
+      <div className="flex items-center gap-1.5 px-3 py-2.5 border-b border-border/20 shrink-0">
         <button
           onClick={closeArtifact}
           className="w-6 h-6 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
+          title="返回目录"
         >
           <ArrowLeft size={14} />
         </button>
         <span className="text-[15px] leading-6 font-medium truncate flex-1">{label}</span>
+        {isChapter && (
+          <div className="flex items-center gap-1">
+            <button
+              onClick={handlePrevChapter}
+              disabled={!hasPrev}
+              title="上一章"
+              className="w-6 h-6 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary/50 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+            >
+              <ChevronLeft size={14} />
+            </button>
+            <button
+              onClick={handleNextChapter}
+              disabled={!hasNext}
+              title="下一章"
+              className="w-6 h-6 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary/50 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+            >
+              <ChevronRight size={14} />
+            </button>
+          </div>
+        )}
         {!loading && content !== null && !editing && (
           <button
             onClick={handleEdit}
+            title="编辑"
             className="w-6 h-6 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
           >
             <Pencil size={12} />
@@ -172,9 +246,55 @@ function ArtifactView({ bookId }: { readonly bookId: string }) {
             onChange={(e) => setEditContent(e.target.value)}
             className="w-full h-full min-h-[300px] bg-transparent text-[15px] leading-7 px-4 py-3 resize-none outline-none border-0 font-mono"
           />
+        ) : isChapter ? (
+          <div className="px-5 py-5 select-text">
+            {parsedTitle && (
+              <h2 className="text-lg font-bold font-serif text-foreground mb-6 text-center border-b border-border/30 pb-3">
+                {parsedTitle}
+              </h2>
+            )}
+            <article className="space-y-4 font-serif text-[15px] md:text-[16px] leading-[1.9] text-foreground/90">
+              {parsedParagraphs.map((para, i) => (
+                <p
+                  key={i}
+                  style={{ textIndent: "2em" }}
+                  className="tracking-wide"
+                >
+                  {para}
+                </p>
+              ))}
+            </article>
+
+            {/* Bottom chapter navigation */}
+            <div className="mt-10 pt-6 border-t border-border/30 flex items-center justify-between gap-2 text-xs">
+              <button
+                type="button"
+                onClick={handlePrevChapter}
+                disabled={!hasPrev}
+                className="flex items-center gap-1 px-3 py-2 rounded-lg border border-border/40 font-medium text-muted-foreground hover:text-foreground hover:bg-secondary/60 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+              >
+                <ChevronLeft size={14} /> 上一章
+              </button>
+              <button
+                type="button"
+                onClick={closeArtifact}
+                className="px-3 py-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary/40 font-medium transition-colors"
+              >
+                目录
+              </button>
+              <button
+                type="button"
+                onClick={handleNextChapter}
+                disabled={!hasNext}
+                className="flex items-center gap-1 px-3 py-2 rounded-lg border border-border/40 font-medium text-muted-foreground hover:text-foreground hover:bg-secondary/60 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+              >
+                下一章 <ChevronRight size={14} />
+              </button>
+            </div>
+          </div>
         ) : (
           <div className="px-4 py-3 text-[15px] leading-7">
-            {renderTruthBody(isChapter ? null : artifactFile, content)}
+            {renderTruthBody(artifactFile, content)}
           </div>
         )}
       </div>

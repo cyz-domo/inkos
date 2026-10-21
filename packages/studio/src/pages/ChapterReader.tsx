@@ -4,8 +4,10 @@ import type { Theme } from "../hooks/use-theme";
 import type { TFunction } from "../hooks/use-i18n";
 import { useColors } from "../hooks/use-colors";
 import { ChapterWorkspacePanel } from "../components/ChapterWorkspacePanel";
+import { parseNovelParagraphs } from "../components/chat/BookSidebar";
 import {
   ChevronLeft,
+  ChevronRight,
   Check,
   X,
   List,
@@ -28,6 +30,7 @@ interface ChapterData {
 interface Nav {
   toBook: (id: string) => void;
   toDashboard: () => void;
+  toChapter: (bookId: string, chapterNumber: number) => void;
 }
 
 export function ChapterReader({ bookId, chapterNumber, nav, theme, t }: {
@@ -41,6 +44,15 @@ export function ChapterReader({ bookId, chapterNumber, nav, theme, t }: {
   const { data, loading, error, refetch } = useApi<ChapterData>(
     `/books/${bookId}/chapters/${chapterNumber}`,
   );
+  const { data: bookMeta } = useApi<{ chapters: { number: number; title: string }[] }>(`/books/${bookId}`);
+  const chapters = bookMeta?.chapters ?? [];
+  const sortedChapterNumbers = chapters.map((c) => c.number).sort((a, b) => a - b);
+  const currentIndex = sortedChapterNumbers.indexOf(chapterNumber);
+  const hasPrev = currentIndex > 0 || (currentIndex === -1 && chapterNumber > 1);
+  const hasNext = currentIndex >= 0 ? currentIndex < sortedChapterNumbers.length - 1 : true;
+  const prevChapter = hasPrev ? (currentIndex > 0 ? sortedChapterNumbers[currentIndex - 1] : chapterNumber - 1) : null;
+  const nextChapter = hasNext ? (currentIndex >= 0 && currentIndex < sortedChapterNumbers.length - 1 ? sortedChapterNumbers[currentIndex + 1] : chapterNumber + 1) : null;
+
   const [editing, setEditing] = useState(false);
   const [editContent, setEditContent] = useState("");
   const [saving, setSaving] = useState(false);
@@ -85,16 +97,10 @@ export function ChapterReader({ bookId, chapterNumber, nav, theme, t }: {
   if (error) return <div className="text-destructive p-8 bg-destructive/5 rounded-xl border border-destructive/20">Error: {error}</div>;
   if (!data) return null;
 
-  // Split markdown content into title and body
-  const lines = data.content.split("\n");
-  const titleLine = lines.find((l) => l.startsWith("# "));
-  const title = titleLine?.replace(/^#\s*/, "") ?? `Chapter ${chapterNumber}`;
-  const body = lines
-    .filter((l) => l !== titleLine)
-    .join("\n")
-    .trim();
-
-  const paragraphs = body.split(/\n\n+/).filter(Boolean);
+  // Split novel content into clean paragraphs with 2-em indent support
+  const { title: parsedTitle, paragraphs } = parseNovelParagraphs(data.content);
+  const title = parsedTitle || (data.filename?.replace(/\.md$/, "") ?? `Chapter ${chapterNumber}`);
+  const bodyLength = paragraphs.reduce((sum, p) => sum + p.length, 0);
 
   return (
     <div className="w-full space-y-10 fade-in">
@@ -121,13 +127,33 @@ export function ChapterReader({ bookId, chapterNumber, nav, theme, t }: {
           </span>
         </nav>
 
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => prevChapter !== null && nav.toChapter(bookId, prevChapter)}
+            disabled={!hasPrev}
+            className="flex items-center gap-1 px-3 py-2 text-xs font-bold bg-secondary text-muted-foreground rounded-xl hover:text-foreground hover:bg-secondary/80 disabled:opacity-30 disabled:pointer-events-none transition-all border border-border/50"
+            title="上一章"
+          >
+            <ChevronLeft size={14} />
+            <span className="hidden sm:inline">上一章</span>
+          </button>
+
           <button
             onClick={() => nav.toBook(bookId)}
             className="flex items-center gap-2 px-4 py-2 text-xs font-bold bg-secondary text-muted-foreground rounded-xl hover:text-foreground hover:bg-secondary/80 transition-all border border-border/50"
           >
             <List size={14} />
             {t("reader.backToList")}
+          </button>
+
+          <button
+            onClick={() => nextChapter !== null && nav.toChapter(bookId, nextChapter)}
+            disabled={!hasNext}
+            className="flex items-center gap-1 px-3 py-2 text-xs font-bold bg-secondary text-muted-foreground rounded-xl hover:text-foreground hover:bg-secondary/80 disabled:opacity-30 disabled:pointer-events-none transition-all border border-border/50"
+            title="下一章"
+          >
+            <span className="hidden sm:inline">下一章</span>
+            <ChevronRight size={14} />
           </button>
 
           {/* Edit / Preview toggle */}
@@ -201,9 +227,9 @@ export function ChapterReader({ bookId, chapterNumber, nav, theme, t }: {
             autoFocus
           />
         ) : (
-          <article className="prose prose-zinc dark:prose-invert max-w-none">
+          <article className="space-y-6 font-serif text-lg md:text-xl leading-[2] text-foreground/90 select-text max-w-none">
             {paragraphs.map((para, i) => (
-              <p key={i} className="font-serif text-lg md:text-xl leading-[1.8] text-foreground/90 mb-8 first-letter:text-2xl first-letter:font-bold first-letter:text-primary/40">
+              <p key={i} style={{ textIndent: "2em" }} className="tracking-wide">
                 {para}
               </p>
             ))}
@@ -214,11 +240,11 @@ export function ChapterReader({ bookId, chapterNumber, nav, theme, t }: {
           <div className="flex items-center gap-4 text-xs font-medium text-muted-foreground">
              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-secondary/50">
                <Type size={14} className="text-primary/60" />
-               <span>{body.length.toLocaleString()} {t("reader.characters")}</span>
+               <span>{bodyLength.toLocaleString()} {t("reader.characters")}</span>
              </div>
              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-secondary/50">
                <Clock size={14} className="text-primary/60" />
-               <span>{Math.ceil(body.length / 500)} {t("reader.minRead")}</span>
+               <span>{Math.ceil(bodyLength / 500)} {t("reader.minRead")}</span>
              </div>
           </div>
           <p className="text-[10px] uppercase tracking-widest text-muted-foreground/40 font-bold">{t("reader.endOfChapter")}</p>
@@ -226,18 +252,32 @@ export function ChapterReader({ bookId, chapterNumber, nav, theme, t }: {
       </div>
 
       {/* Footer Navigation */}
-      <div className="flex justify-between items-center py-8">
-        {chapterNumber > 1 ? (
-          <button
-            onClick={() => nav.toBook(bookId)}
-            className="flex items-center gap-2 text-sm font-bold text-muted-foreground hover:text-primary transition-all group"
-          >
-            <RotateCcw size={16} className="group-hover:-rotate-45 transition-transform" />
-            {t("reader.chapterList")}
-          </button>
-        ) : (
-          <div />
-        )}
+      <div className="flex justify-between items-center py-8 gap-4">
+        <button
+          onClick={() => prevChapter !== null && nav.toChapter(bookId, prevChapter)}
+          disabled={!hasPrev}
+          className="flex items-center gap-2 text-sm font-bold text-muted-foreground hover:text-primary disabled:opacity-30 disabled:pointer-events-none transition-all"
+        >
+          <ChevronLeft size={16} />
+          上一章
+        </button>
+
+        <button
+          onClick={() => nav.toBook(bookId)}
+          className="flex items-center gap-2 text-sm font-bold text-muted-foreground hover:text-primary transition-all group"
+        >
+          <RotateCcw size={16} className="group-hover:-rotate-45 transition-transform" />
+          {t("reader.chapterList")}
+        </button>
+
+        <button
+          onClick={() => nextChapter !== null && nav.toChapter(bookId, nextChapter)}
+          disabled={!hasNext}
+          className="flex items-center gap-2 text-sm font-bold text-muted-foreground hover:text-primary disabled:opacity-30 disabled:pointer-events-none transition-all"
+        >
+          下一章
+          <ChevronRight size={16} />
+        </button>
       </div>
     </div>
   );
