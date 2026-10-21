@@ -220,7 +220,7 @@ export function ImportManager({ nav, theme, t, initialTab }: { nav: Nav; theme: 
             <select value={chBookId} onChange={(e) => setChBookId(e.target.value)}
               className="w-full px-3 py-2 rounded-lg bg-secondary/30 border border-border text-sm">
               <option value="">{t("import.selectTarget")}</option>
-              {booksData?.books.map((b) => <option key={b.id} value={b.id}>{b.title}</option>)}
+              {(booksData?.books ?? []).map((b) => <option key={b.id} value={b.id}>{b.title}</option>)}
             </select>
             <input
               type="text" value={chSplitRegex} onChange={(e) => setChSplitRegex(e.target.value)}
@@ -259,7 +259,7 @@ export function ImportManager({ nav, theme, t, initialTab }: { nav: Nav; theme: 
               <select value={canonFrom} onChange={(e) => setCanonFrom(e.target.value)}
                 className="w-full px-3 py-2 rounded-lg bg-secondary/30 border border-border text-sm">
                 <option value="">{t("import.selectSource")}</option>
-                {booksData?.books.map((b) => <option key={b.id} value={b.id}>{b.title}</option>)}
+                {(booksData?.books ?? []).map((b) => <option key={b.id} value={b.id}>{b.title}</option>)}
               </select>
             ) : (
               <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-dashed border-border bg-secondary/20 px-4 py-4 text-sm hover:bg-secondary/30">
@@ -278,7 +278,7 @@ export function ImportManager({ nav, theme, t, initialTab }: { nav: Nav; theme: 
             <select value={canonTarget} onChange={(e) => setCanonTarget(e.target.value)}
               className="w-full px-3 py-2 rounded-lg bg-secondary/30 border border-border text-sm">
               <option value="">{t("import.selectDerivative")}</option>
-              {booksData?.books.map((b) => <option key={b.id} value={b.id}>{b.title}</option>)}
+              {(booksData?.books ?? []).map((b) => <option key={b.id} value={b.id}>{b.title}</option>)}
             </select>
             <button onClick={handleImportCanon} disabled={loading || !canonTarget || (canonSourceType === "book" ? !canonFrom : !canonFile)}
               className={`px-4 py-2 text-sm rounded-lg ${c.btnPrimary} disabled:opacity-30`}>
@@ -335,7 +335,7 @@ export function ImportManager({ nav, theme, t, initialTab }: { nav: Nav; theme: 
             <select value={spParent} onChange={(e) => setSpParent(e.target.value)}
               className="w-full px-3 py-2 rounded-lg bg-secondary/30 border border-border text-sm">
               <option value="">{t("import.selectParent")}</option>
-              {booksData?.books.map((b) => <option key={b.id} value={b.id}>{b.title}</option>)}
+              {(booksData?.books ?? []).map((b) => <option key={b.id} value={b.id}>{b.title}</option>)}
             </select>
             <textarea value={spDirection} onChange={(e) => setSpDirection(e.target.value)} rows={5}
               placeholder={t("import.spinoffDirection")}

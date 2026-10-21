@@ -183,9 +183,9 @@ export function WorkInspector({ workId, onBack, onChat }: {
           <aside className="h-full w-[min(820px,94vw)] overflow-y-auto border-l border-border bg-background p-7 shadow-2xl" onClick={(event) => event.stopPropagation()}>
             {selected && <div className="mb-5 flex flex-wrap items-center gap-2">
               <select aria-label={tr("选择作品版本", "Select revision")} className="max-w-full rounded border border-border bg-background p-2 text-sm" value={previewRevisionId || selected.revision.id} onChange={event => {
-                const revision = selectedArtifact?.revisions.find(revision => revision.id === event.target.value);
+                const revision = selectedArtifact?.revisions?.find(revision => revision.id === event.target.value);
                 if (selectedArtifact && revision) void openRevision(selectedArtifact, revision);
-              }}>{selectedArtifact?.revisions.map(revision => <option key={revision.id} value={revision.id}>{revision.status} · {revision.createdAt} · {revision.id}</option>)}</select>
+              }}>{(selectedArtifact?.revisions ?? []).map(revision => <option key={revision.id} value={revision.id}>{revision.status} · {revision.createdAt} · {revision.id}</option>)}</select>
               {selectedArtifact?.currentRevisionId && selectedArtifact.currentRevisionId !== selected.revision.id && <button className="rounded border border-border px-3 py-2 text-sm" onClick={() => void compareCurrent()}>{tr("比较当前版本", "Compare with current")}</button>}
               {selectedArtifact?.currentRevisionId !== selected.revision.id && (!selectedArtifact?.currentRevisionId || comparison) && <button className="rounded bg-primary px-3 py-2 text-sm text-primary-foreground" onClick={() => void adoptRevision()}>{tr("采用这个版本", "Adopt this revision")}</button>}
               {operationError && <p role="alert" className="w-full text-sm text-destructive">{operationError}</p>}

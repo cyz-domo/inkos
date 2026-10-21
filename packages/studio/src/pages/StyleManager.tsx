@@ -127,7 +127,7 @@ export function StyleManager({ nav, theme, t }: { nav: Nav; theme: Theme; t: TFu
                   className="w-full px-3 py-2 rounded-lg bg-secondary/30 border border-border text-sm"
                 >
                   <option value="">{t("style.selectBook")}</option>
-                  {booksData?.books.map((b) => (
+                  {(booksData?.books ?? []).map((b) => (
                     <option key={b.id} value={b.id}>{b.title}</option>
                   ))}
                 </select>

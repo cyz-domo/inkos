@@ -93,7 +93,7 @@ export function TruthFiles({ bookId, nav, theme, t }: { bookId: string; nav: Nav
       <div className="grid grid-cols-[240px_1fr] gap-6">
         {/* File list */}
         <div className={`border ${c.cardStatic} rounded-lg overflow-hidden`}>
-          {data?.files.map((f) => (
+          {(data?.files ?? []).map((f) => (
             <button
               key={f.name}
               onClick={() => { setSelected(f.name); setEditMode(false); }}
